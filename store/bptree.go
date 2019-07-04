@@ -1,6 +1,11 @@
 package store
 
-// A bptree is a B+ tree implementation of Store.
+import (
+	"errors"
+	"math"
+)
+
+// A bptree is an in-memory B+ tree implementation of Store.
 type bptree struct {
 	b    int
 	root treenode
@@ -8,22 +13,41 @@ type bptree struct {
 
 // Get searches for a value in the B+ tree.
 func (t *bptree) Get(key int) []byte {
-	return nil
+	return t.root.get(key)
 }
 
 // Insert adds a new key-value pair to the tree.
 func (t *bptree) Insert(key int, val []byte) bool {
-	return false
+	newKey, newChild, err := t.root.insert(key, val, t.b)
+
+	if err != nil {
+		return false
+	}
+
+	if newChild != nil {
+		newNode := newNonLeaf(t.b)
+		newNode.keys = []int{newKey}
+		newNode.children = []treenode{t.root, newChild}
+
+		t.root.setParent(newNode)
+		newChild.setParent(newNode)
+		t.root = newNode
+	}
+
+	return true
 }
 
 // Update applies the given function to an existing value, or returns false if
 // no value is present with the given key.
 func (t *bptree) Update(key int, f func([]byte) []byte) bool {
-	return false
+	return t.root.update(key, f)
 }
 
+// Delete deletes the record associated with a given key, if such a record exists.
+// It returns true if a record was deleted.
 func (t *bptree) Delete(key int) bool {
-	return false
+	panic(errors.New("Delete not yet implemented."))
+	return t.root.del(key, t.b, nil, nil)
 }
 
 // NewBPTree instantitates a B+ tree, with a given branching factor.
@@ -36,18 +60,26 @@ func NewBPTree(b int) *bptree {
 
 // A treenode can be either a leafnode or a nonleafnode.
 type treenode interface {
+	del(key, b int, leftSibling, rightSibling treenode) bool
 	get(key int) []byte
+	insert(key int, val []byte, b int) (int, treenode, error)
+	update(key int, f func([]byte) []byte) bool
+	setParent(p *nonleafnode)
+	firstKey() int
+	concat(t treenode)
 }
 
 type nonleafnode struct {
 	keys     []int      // List of keys (length b-1)
 	children []treenode // Pointers to children (length b)
+	parent   *nonleafnode
 }
 
-func newNonLeaf(b int) treenode {
+func newNonLeaf(b int) *nonleafnode {
 	return &nonleafnode{
-		make([]int, b-1),
-		make([]treenode, b),
+		make([]int, 0, b-1),
+		make([]treenode, 0, b),
+		nil,
 	}
 }
 
@@ -57,12 +89,16 @@ type leafnode struct {
 	keys     []int
 	children [][]byte
 	nextLeaf *leafnode
+	prevLeaf *leafnode
+	parent   *nonleafnode
 }
 
-func newLeaf(b int) treenode {
+func newLeaf(b int) *leafnode {
 	return &leafnode{
-		make([]int, b-1),
-		make([][]byte, b-1),
+		make([]int, 0, b),
+		make([][]byte, 0, b),
+		nil,
+		nil,
 		nil,
 	}
 }
@@ -81,9 +117,462 @@ func (n *leafnode) get(key int) []byte {
 		if k == key {
 			return n.children[i]
 		}
-		if k < key {
+		if k > key {
 			return nil
 		}
 	}
 	return nil
+}
+
+func (n *nonleafnode) insert(key int, val []byte, b int) (int, treenode, error) {
+	for i, k := range n.keys {
+		if k == key {
+			return -1, nil, errors.New("Key already present")
+		}
+		if k > key {
+			newKey, newChild, err := n.children[i].insert(key, val, b)
+			return n.insertChild(newKey, newChild, err, b)
+		}
+	}
+	newKey, newChild, err := n.children[len(n.keys)].insert(key, val, b)
+	return n.insertChild(newKey, newChild, err, b)
+}
+
+func (n *nonleafnode) insertChild(k int, c treenode, err error, b int) (int, treenode, error) {
+	if err != nil {
+		return k, c, err
+	}
+	if c == nil {
+		return -1, nil, nil
+	}
+	if len(n.children) < b {
+		insChild(k, c, n)
+		return -1, nil, nil
+	} else {
+		i := int(math.Ceil(float64(len(n.keys)+1)/2)) - 1
+		median := n.keys[i]
+
+		newNode := newNonLeaf(b)
+		newNode.parent = n.parent
+
+		newNode.keys = make([]int, b-i-2)
+		newNode.children = make([]treenode, b-i-1)
+		copy(newNode.keys, n.keys[i+1:])
+		copy(newNode.children, n.children[i+1:])
+
+		for _, child := range newNode.children {
+			child.setParent(newNode)
+		}
+
+		n.keys = n.keys[:i]
+		n.children = n.children[:i+1]
+
+		if k >= median {
+			insChild(k, c, newNode)
+		} else {
+			insChild(k, c, n)
+		}
+
+		return median, newNode, nil
+	}
+}
+
+func insChild(key int, val treenode, n *nonleafnode) {
+	// Insert the given key-child pair into a node (assumes the node has space)
+
+	var index int
+	for i, k := range n.keys {
+		index = i
+		if k > key {
+			break
+		}
+	}
+	if len(n.keys) > 0 && key > n.keys[len(n.keys)-1] {
+		index++
+	}
+
+	keys := append(n.keys, 0)
+	copy(keys[index+1:], n.keys[index:])
+	keys[index] = key
+	n.keys = keys
+
+	index++
+	vals := append(n.children, nil)
+	copy(vals[index+1:], n.children[index:])
+	vals[index] = val
+	n.children = vals
+
+	val.setParent(n)
+}
+
+func (n *leafnode) insert(key int, val []byte, b int) (int, treenode, error) {
+	for _, k := range n.keys {
+		if k == key {
+			return -1, nil, errors.New("Key already present")
+		}
+	}
+
+	if len(n.keys) < b {
+		insRecord(key, val, n)
+
+		return -1, nil, nil
+	} else {
+		// Split
+		i := int(math.Ceil(float64(len(n.keys)+1)/2)) - 1
+		median := n.keys[i]
+
+		newNode := newLeaf(b)
+
+		newNode.keys = make([]int, b-i)
+		newNode.children = make([][]byte, b-i)
+		copy(newNode.keys, n.keys[i:])
+		copy(newNode.children, n.children[i:])
+
+		newNode.nextLeaf = n.nextLeaf
+		newNode.prevLeaf = n
+		if newNode.nextLeaf != nil {
+			newNode.nextLeaf.prevLeaf = newNode
+		}
+		newNode.parent = n.parent
+
+		n.keys = n.keys[:i]
+		n.children = n.children[:i]
+		n.nextLeaf = newNode
+
+		if key >= median {
+			insRecord(key, val, newNode)
+		} else {
+			insRecord(key, val, n)
+		}
+
+		return median, newNode, nil
+	}
+}
+
+func insRecord(key int, val []byte, n *leafnode) {
+	// Insert the given key-value pair into a node (assumes the node has space)
+
+	var index int
+	for i, k := range n.keys {
+		index = i
+		if k > key {
+			break
+		}
+	}
+	if len(n.keys) > 0 && key > n.keys[len(n.keys)-1] {
+		index++
+	}
+
+	keys := append(n.keys, 0)
+	copy(keys[index+1:], n.keys[index:])
+	keys[index] = key
+	n.keys = keys
+
+	vals := append(n.children, nil)
+	copy(vals[index+1:], n.children[index:])
+	vals[index] = val
+	n.children = vals
+}
+
+func (n *nonleafnode) update(key int, f func([]byte) []byte) bool {
+	for i, k := range n.keys {
+		if k > key {
+			return n.children[i].update(key, f)
+		}
+	}
+	return n.children[len(n.keys)].update(key, f)
+}
+
+func (n *leafnode) update(key int, f func([]byte) []byte) bool {
+	for i, k := range n.keys {
+		if k == key {
+			oldVal := n.children[i]
+			n.children[i] = f(oldVal)
+			return true
+		}
+		if k > key {
+			return false
+		}
+	}
+	return false
+}
+
+func (n *nonleafnode) del(key, b int, leftSib, rightSib treenode) bool {
+	var ok bool
+	for i, k := range n.keys {
+		if k > key {
+			var leftSib treenode
+			if i > 0 {
+				leftSib = n.children[i-1]
+			}
+			ok = n.children[i].del(key, b, leftSib, n.children[i+1])
+			goto redistribute
+		}
+	}
+	if len(n.keys) > 1 {
+		ok = n.children[len(n.keys)].del(key, b, n.children[len(n.keys)-1], nil)
+		goto redistribute
+	} else {
+		ok = n.children[len(n.keys)].del(key, b, nil, nil)
+		goto redistribute
+	}
+
+redistribute:
+	minChildren := int(math.Ceil(float64(b) / 2))
+	if len(n.children) >= minChildren {
+		return ok
+	}
+
+	// Try to redistribute
+	if leftSib != nil {
+		leftSibling := leftSib.(*nonleafnode)
+		k, v := leftSibling.borrowValue(false, b)
+		if v != nil {
+			n.keys = append(n.keys, 0)
+			copy(n.keys[1:], n.keys)
+			n.keys[0] = k
+
+			n.children = append(n.children, nil)
+			copy(n.children[1:], n.children)
+			n.children[0] = v
+
+			for i, k := range n.parent.keys {
+				if k == n.keys[1] {
+					n.parent.keys[i] = n.keys[0]
+					break
+				}
+			}
+
+			return true
+		}
+	}
+	if rightSib != nil {
+		rightSibling := rightSib.(*nonleafnode)
+		k, v := rightSibling.borrowValue(true, b)
+		if v != nil {
+			n.keys = append(n.keys, k)
+			n.children = append(n.children, v)
+
+			for i, k := range n.parent.keys {
+				if k == n.keys[len(n.keys)-1] {
+					n.parent.keys[i] = rightSib.firstKey()
+				}
+			}
+
+			return true
+		}
+	}
+
+	// If redistribution is not possible, merge
+	if leftSib != nil {
+		leftSib.concat(n)
+
+		for i, k := range n.parent.keys {
+			if k == n.firstKey() {
+				n.parent.keys = append(n.parent.keys[:i], n.parent.keys[i+1:]...)
+				n.parent.children = append(n.parent.children[:i], n.parent.children[i+1:]...)
+				break
+			}
+		}
+
+		return true
+	}
+	if rightSib != nil {
+		n.concat(rightSib)
+
+		for i, k := range n.parent.keys {
+			if k == rightSib.firstKey() {
+				n.parent.keys = append(n.parent.keys[:i], n.parent.keys[i+1:]...)
+				n.parent.children = append(n.parent.children[:i], n.parent.children[i+1:]...)
+				break
+			}
+		}
+
+		return true
+	}
+
+	// If we haven't returned before here, this is the root
+	return true
+}
+
+func (n *leafnode) del(key, b int, leftSib, rightSib treenode) bool {
+	// If key not present, fail
+	if len(n.keys) == 0 {
+		return false
+	}
+	for _, k := range n.keys {
+		if k == key {
+			goto present
+		}
+		if k > key {
+			return false
+		}
+	}
+	return false
+
+present:
+	i := 0
+	for _, k := range n.keys {
+		if k == key {
+			break
+		}
+		i++
+	}
+
+	n.keys = append(n.keys[:i], n.keys[i+1:]...)
+	n.children = append(n.children[:i], n.children[i+1:]...)
+
+	minChildren := int(math.Ceil(float64(b) / 2))
+	if len(n.children) >= minChildren {
+		return true
+	}
+
+	// Try to redistribute
+	if leftSib != nil {
+		leftSibling := leftSib.(*leafnode)
+		k, v := leftSibling.borrowValue(false, b)
+		if v != nil {
+			n.keys = append(n.keys, 0)
+			copy(n.keys[1:], n.keys)
+			n.keys[0] = k
+
+			n.children = append(n.children, nil)
+			copy(n.children[1:], n.children)
+			n.children[0] = v
+
+			for i, k := range n.parent.keys {
+				if k == n.keys[1] {
+					n.parent.keys[i] = n.keys[0]
+					break
+				}
+			}
+
+			return true
+		}
+	}
+	if rightSib != nil {
+		rightSibling := rightSib.(*leafnode)
+		k, v := rightSibling.borrowValue(true, b)
+		if v != nil {
+			n.keys = append(n.keys, k)
+			n.children = append(n.children, v)
+
+			for i, k := range n.parent.keys {
+				if k == n.keys[len(n.keys)-1] {
+					n.parent.keys[i] = rightSib.firstKey()
+				}
+			}
+
+			return true
+		}
+	}
+
+	// If redistribution is not possible, merge
+	if leftSib != nil {
+		leftSib.concat(n)
+
+		for i, k := range n.parent.keys {
+			if k == n.firstKey() {
+				n.parent.keys = append(n.parent.keys[:i], n.parent.keys[i+1:]...)
+				n.parent.children = append(n.parent.children[:i], n.parent.children[i+1:]...)
+				break
+			}
+		}
+
+		return true
+	}
+	if rightSib != nil {
+		n.concat(rightSib)
+
+		for i, k := range n.parent.keys {
+			if k == rightSib.firstKey() {
+				n.parent.keys = append(n.parent.keys[:i], n.parent.keys[i+1:]...)
+				n.parent.children = append(n.parent.children[:i], n.parent.children[i+1:]...)
+				break
+			}
+		}
+
+		return true
+	}
+
+	// If we haven't returned before here, this is the root
+	return true
+}
+
+func (n *leafnode) setParent(p *nonleafnode) {
+	n.parent = p
+}
+
+func (n *nonleafnode) setParent(p *nonleafnode) {
+	n.parent = p
+}
+
+func (n *leafnode) borrowValue(left bool, b int) (key int, val []byte) {
+	minChildren := int(math.Ceil(float64(b) / 2))
+	if len(n.children) > minChildren {
+		if left {
+			key = n.keys[0]
+			val = n.children[0]
+			n.keys = n.keys[1:]
+			n.children = n.children[1:]
+			return
+		} else {
+			i := len(n.keys) - 1
+
+			key = n.keys[i]
+			val = n.children[i]
+			n.keys = n.keys[:i]
+			n.children = n.children[:i]
+			return
+		}
+	} else {
+		return -1, nil
+	}
+}
+
+func (n *nonleafnode) borrowValue(left bool, b int) (key int, val treenode) {
+	minChildren := int(math.Ceil(float64(b) / 2))
+	if len(n.children) > minChildren {
+		if left {
+			key = n.keys[0]
+			val = n.children[0]
+			n.keys = n.keys[1:]
+			n.children = n.children[1:]
+			return
+		} else {
+			i := len(n.keys) - 1
+
+			key = n.keys[i]
+			val = n.children[i]
+			n.keys = n.keys[:i]
+			n.children = n.children[:i]
+			return
+		}
+	} else {
+		return -1, nil
+	}
+}
+
+func (n *leafnode) firstKey() int {
+	return n.keys[0]
+}
+
+func (n *nonleafnode) firstKey() int {
+	return n.keys[0]
+}
+
+func (n *leafnode) concat(t treenode) {
+	l := t.(*leafnode)
+	n.keys = append(n.keys, l.keys...)
+	n.children = append(n.children, l.children...)
+	if l.nextLeaf != nil {
+		l.nextLeaf.prevLeaf = n
+	}
+	n.nextLeaf = l.nextLeaf
+}
+
+func (n *nonleafnode) concat(t treenode) {
+	nl := t.(*nonleafnode)
+	n.keys = append(n.keys, nl.keys...)
+	n.children = append(n.children, nl.children...)
 }
