@@ -8,7 +8,7 @@ import (
 type tokentype int
 
 const (
-	_ tokentype = iota
+	eof tokentype = iota
 	slct
 	from
 	where
@@ -19,6 +19,7 @@ const (
 	left
 	right
 	join
+	on
 	union
 	intersect
 	minus
@@ -75,6 +76,10 @@ func newLexer(input string) *lexer {
 }
 
 func (l *lexer) lex() token {
+	if len(l.str) == 0 {
+		return token{eof, ""}
+	}
+
 startloop:
 	for {
 		if len(l.str) == 0 {

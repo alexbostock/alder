@@ -16,6 +16,7 @@ func TestLexer(t *testing.T) {
 		token{str, "id"},
 		token{less, ""},
 		token{num, "5"},
+		token{eof, ""},
 	}
 
 	for _, token := range tokens {
