@@ -7,6 +7,8 @@ tables:
         type: string
       - name: price
         type: int
+      - name: user_id
+        type: int
 
   - table:
     name: user

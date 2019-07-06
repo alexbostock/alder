@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -21,6 +23,21 @@ func main() {
 	}
 
 	schema := schema.New(schemaFile)
+
+	r := bufio.NewReader(os.Stdin)
+	for {
+		line, err := r.ReadString(';')
+		if err != nil {
+			if err.Error() == "EOF" {
+				os.Exit(0)
+			} else {
+				panic(err)
+			}
+		}
+
+		fmt.Println(line[:len(line)-1])
+		fmt.Println("(SQL parser is not yet implemented)")
+	}
 
 	_ = schema
 }

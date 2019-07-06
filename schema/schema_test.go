@@ -33,6 +33,10 @@ func TestSchemaParse(t *testing.T) {
 						Name: "price",
 						Type: Int,
 					},
+					Field{
+						Name: "user_id",
+						Type: Int,
+					},
 				},
 			},
 			Table{
