@@ -1,0 +1,20 @@
+tables:
+  - table:
+    name: order
+    key: id
+    fields:
+      - name: items
+        type: string
+      - name: price
+        type: int
+
+  - table:
+    name: user
+    key: id
+    fields:
+      - name: forename
+        type: string
+      - name: surname
+        type: string
+      - name: address
+        type: string
