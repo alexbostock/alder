@@ -1,12 +1,15 @@
 package sql
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/davecgh/go-spew/spew"
+)
 
 type nonterminal int
 
 const (
 	statement nonterminal = iota
-	query
 	selectFrom
 	insertInto
 	updateSet
@@ -14,11 +17,34 @@ const (
 	unionOf
 	intersectionOf
 	differenceOf
+	keyList
+	literalList
+	key
+	keys
+	literals
+	valueList
+	assignment
+	assignmentList
+	filters
+	whereExpr
+	smaller
+	larger
+	equals
+	innerJoin
+	outerJoin
+	leftJoin
+	rightJoin
+	orderBy
+	literal
+	table
+	integer
+	strVal
 )
 
 type node struct {
 	t    nonterminal
 	args []*node
+	val  string
 }
 
 // A parser parses an SQL query, assumes the input does not end in a semicolon.
@@ -45,12 +71,14 @@ func (p *parser) consume(t tokentype) string {
 
 		return s
 	} else {
-		panic(errors.New("Parse error"))
+		spew.Dump(t)
+		spew.Dump(p.lookahead)
+		panic(errors.New("Parse error: unexpected token"))
 	}
 }
 
 func (p *parser) parse() *node {
-	n := &node{statement, nil}
+	n := &node{statement, nil, ""}
 
 	n.args = []*node{p.query()}
 
@@ -58,15 +86,15 @@ func (p *parser) parse() *node {
 		switch p.lookahead.kind {
 		case union:
 			p.consume(union)
-			n = &node{unionOf, []*node{n, p.query()}}
+			n = &node{unionOf, []*node{n, p.query()}, ""}
 		case intersect:
 			p.consume(intersect)
-			n = &node{intersectionOf, []*node{n, p.query()}}
+			n = &node{intersectionOf, []*node{n, p.query()}, ""}
 		case minus:
 			p.consume(minus)
-			n = &node{differenceOf, []*node{n, p.query()}}
+			n = &node{differenceOf, []*node{n, p.query()}, ""}
 		default:
-			panic(errors.New("Parse error"))
+			panic(errors.New("Parse error: expected UNION, INTERSECT or MINUS"))
 		}
 	}
 
@@ -83,6 +111,8 @@ func (p *parser) query() *node {
 		return p.updateSet()
 	case del:
 		return p.del()
+	default:
+		panic(errors.New("Parse error: expected SELECT, INSERT, UPDATE or DELETE"))
 	}
 }
 
@@ -93,7 +123,7 @@ func (p *parser) selectFrom() *node {
 	table := p.table()
 	filters := p.filters()
 
-	return &node{selectFrom, []*node{keys, table, filters}}
+	return &node{selectFrom, []*node{keys, table, filters}, ""}
 }
 
 func (p *parser) insertInto() *node {
@@ -105,7 +135,7 @@ func (p *parser) insertInto() *node {
 	valuesList := p.valuesList()
 	filters := p.filters()
 
-	return &node{insertInto, []*node{keys, table, valuesList, filters}}
+	return &node{insertInto, []*node{keys, table, valuesList, filters}, ""}
 }
 
 func (p *parser) updateSet() *node {
@@ -115,7 +145,7 @@ func (p *parser) updateSet() *node {
 	assignments := p.assignmentList()
 	filters := p.filters()
 
-	return &node{updateSet, table, assignments, filters}
+	return &node{updateSet, []*node{table, assignments, filters}, ""}
 }
 
 func (p *parser) del() *node {
@@ -124,11 +154,11 @@ func (p *parser) del() *node {
 	table := p.table()
 	filters := p.filters()
 
-	return &node{deleteFrom, table, filters}
+	return &node{deleteFrom, []*node{table, filters}, ""}
 }
 
 func (p *parser) keyList() *node {
-	n := &node{keyList, make([]*node)}
+	n := &node{keyList, make([]*node, 0, 1), ""}
 	n.args = append(n.args, p.key())
 
 	for p.lookahead.kind == comma {
@@ -140,13 +170,15 @@ func (p *parser) keyList() *node {
 }
 
 func (p *parser) literalList() *node {
-	n := &node{literalList, make([]*node)}
-	n.args = append(n.args, p.literal())
+	n := &node{literalList, make([]*node, 0, 1), ""}
+	n.args = append(n.args, p.value())
 
 	for p.lookahead.kind == comma {
 		p.consume(comma)
-		n.args = append(n.args, p.literal())
+		n.args = append(n.args, p.value())
 	}
+
+	return n
 }
 
 func (p *parser) keys() *node {
@@ -154,7 +186,7 @@ func (p *parser) keys() *node {
 	kl := p.keyList()
 	p.consume(rparen)
 
-	return &node{keys, []*node{kl}}
+	return &node{keys, []*node{kl}, ""}
 }
 
 func (p *parser) values() *node {
@@ -162,11 +194,11 @@ func (p *parser) values() *node {
 	ll := p.literalList()
 	p.consume(rparen)
 
-	return &node{literals, []*node{ll}}
+	return &node{literals, []*node{ll}, ""}
 }
 
 func (p *parser) valuesList() *node {
-	n := &node{valuesList, make([]*node)}
+	n := &node{valueList, make([]*node, 0, 1), ""}
 	n.args = append(n.args, p.values())
 
 	for p.lookahead.kind == comma {
@@ -180,111 +212,103 @@ func (p *parser) valuesList() *node {
 func (p *parser) assignment() *node {
 	key := p.key()
 	p.consume(equal)
-	val := p.literal()
+	val := p.value()
 
-	return &node{assignment, []*node{key, val}}
+	return &node{assignment, []*node{key, val}, ""}
 }
 
 func (p *parser) assignmentList() *node {
-	n := &node{assignmentList, make([]*node)}
+	n := &node{assignmentList, make([]*node, 0, 1), ""}
 	n.args = append(n.args, p.assignment())
 
 	for p.lookahead.kind == comma {
 		p.consume(comma)
 		n.args = append(n.args, p.assignment())
 	}
-}
-
-func (p *parser) filters() *node {
-	n := &node{filters, make([]*node)}
-	for {
-		switch p.lookahead.kind {
-		case where:
-			n.arsg = append(n.args, p.where())
-		case order:
-			n.arsg = append(n.args, p.order())
-		case inner:
-		case outer:
-		case left:
-		case right:
-		case join:
-			n.arsg = append(n.args, p.join())
-		case eof:
-		case union:
-		case intersect:
-		case minus:
-			break
-		default:
-			panic(errors.New("Parse error"))
-		}
-	}
 
 	return n
 }
 
+func (p *parser) filters() *node {
+	n := &node{filters, make([]*node, 0), ""}
+	for {
+		switch p.lookahead.kind {
+		case where:
+			n.args = append(n.args, p.where())
+		case orderby:
+			n.args = append(n.args, p.order())
+		case inner, outer, left, right, join:
+			n.args = append(n.args, p.join())
+		case eof, union, intersect, minus:
+			return n
+		default:
+			panic(errors.New("Parse error: expected WHERE, ORDER or [INNER|OUTER|LEFT|RIGHT] JOIN"))
+		}
+	}
+}
+
 func (p *parser) where() *node {
 	p.consume(where)
-	a := p.consume(str) // key or literal
+	a := p.value()
 	comp := p.comparator()
-	b := p.consume(str) // key or literal
+	b := p.value()
 
-	if a.nonterminal == key {
-		if b.nonterminal != literal {
-			panic(errors.New("Parse error"))
+	if a.t == key {
+		if b.t != literal {
+			panic(errors.New("Parse error: expected key = literal"))
 		}
 	} else {
-		if b.nonterminal != key {
-			panic(errors.New("Parse error"))
+		if b.t != key {
+			panic(errors.New("Parse error: expected literal = key"))
 		}
 		a, b = b, a
 	}
 
-	return &node{where, []*node{a, comp, b}}
+	return &node{whereExpr, []*node{a, comp, b}, ""}
 }
 
 func (p *parser) comparator() *node {
 	switch p.lookahead.kind {
 	case less:
 		p.consume(less)
-		return &node{smaller, nil}
+		return &node{smaller, nil, ""}
 	case greater:
 		p.consume(greater)
-		return &node{larger, nil}
+		return &node{larger, nil, ""}
 	case equal:
 		p.consume(equal)
-		return &node{equals, nil}
+		return &node{equals, nil, ""}
 	default:
-		panic(errors.New("Parse error"))
+		panic(errors.New("Parse error: expected <, > or ="))
 	}
 }
 func (p *parser) order() *node {
-	p.consume(order)
-	p.consume(by)
+	p.consume(orderby)
 	k := p.key()
 
-	return &node{orderBy, k}
+	return &node{orderBy, []*node{k}, ""}
 }
 
-func (p *parser) join() {
+func (p *parser) join() *node {
 	n := &node{}
 
 	switch p.lookahead.kind {
 	case inner:
-		n.kind = innerJoin
+		n.t = innerJoin
 		p.consume(inner)
 	case outer:
-		n.kind = outerJoin
+		n.t = outerJoin
 		p.consume(outer)
 	case left:
-		n.kind = leftJoin
+		n.t = leftJoin
 		p.consume(left)
 	case right:
-		n.kind = rightJoin
+		n.t = rightJoin
 		p.consume(right)
 	case join:
-		n.kind = innerJoin
+		n.t = innerJoin
 	default:
-		panic(errors.New("Parse error"))
+		panic(errors.New("Parse error: expected a JOIN statement"))
 	}
 
 	p.consume(join)
@@ -301,36 +325,43 @@ func (p *parser) join() {
 }
 
 func (p *parser) key() *node {
+	var s string
 	if p.lookahead.kind == str {
-		s := p.lookahead.str
-		p.consume(str)
+		s = p.consume(str)
 	} else {
+		s = p.lookahead.str
 		p.consume(star)
 	}
 
 	// TODO: check s against schema
+
+	return &node{key, nil, s}
 }
 
-func (p *parser) table() {
+func (p *parser) table() *node {
 	s := p.consume(str)
-	_ = s
 
 	// TODO: check s against schema
+
+	return &node{table, nil, s}
 }
 
-func (p *parser) literal() {
-	// All values stored are integers
-	n := p.consume(num)
-	_ = n
-}
-
-func (p *parser) value() {
+func (p *parser) value() *node {
 	switch p.lookahead.kind {
 	case str:
-		p.key()
+		return p.key()
 	case num:
-		p.literal()
+		return &node{literal, []*node{
+			&node{integer, nil, p.consume(num)},
+		}, ""}
+	case quote:
+		p.consume(quote)
+		s := p.consume(str)
+		p.consume(quote)
+		return &node{literal, []*node{
+			&node{strVal, nil, s},
+		}, ""}
 	default:
-		panic(errors.New("Parse error"))
+		panic(errors.New("Parse error: expected a key, \"string\" or number"))
 	}
 }

@@ -12,8 +12,7 @@ const (
 	slct
 	from
 	where
-	order
-	by
+	orderby
 	inner
 	outer
 	left
@@ -38,6 +37,7 @@ const (
 	star
 	str
 	num
+	quote
 )
 
 type token struct {
@@ -56,13 +56,13 @@ func newLexer(input string) *lexer {
 			"select":    slct,
 			"from":      from,
 			"where":     where,
-			"order":     order,
-			"by":        by,
+			"order by":  orderby,
 			"inner":     inner,
 			"outer":     outer,
 			"left":      left,
 			"right":     right,
 			"join":      join,
+			"on":        on,
 			"union":     union,
 			"intersect": intersect,
 			"minus":     minus,
@@ -114,6 +114,9 @@ startloop:
 		case '*':
 			l.str = l.str[1:]
 			return token{star, ""}
+		case '"':
+			l.str = l.str[1:]
+			return token{quote, ""}
 		default:
 			break startloop
 		}
@@ -136,25 +139,7 @@ builderloop:
 		}
 
 		switch l.str[0] {
-		case ' ':
-			break builderloop
-		case '\t':
-			break builderloop
-		case '\n':
-			break builderloop
-		case '(':
-			break builderloop
-		case ')':
-			break builderloop
-		case ',':
-			break builderloop
-		case '=':
-			break builderloop
-		case '>':
-			break builderloop
-		case '<':
-			break builderloop
-		case '*':
+		case ' ', '\t', '\n', '(', ')', ',', '=', '>', '<', '*', '"':
 			break builderloop
 		default:
 			if !unicode.IsDigit(rune(l.str[0])) {

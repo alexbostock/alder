@@ -3,19 +3,19 @@ package sql
 import "testing"
 
 func TestLexer(t *testing.T) {
-	l := newLexer("SELECT name, price FROM products WHERE id < 5")
+	l := newLexer("SELECT price FROM products WHERE name = \"apples\"")
 
 	tokens := []token{
 		token{slct, ""},
-		token{str, "name"},
-		token{comma, ""},
 		token{str, "price"},
 		token{from, ""},
 		token{str, "products"},
 		token{where, ""},
-		token{str, "id"},
-		token{less, ""},
-		token{num, "5"},
+		token{str, "name"},
+		token{equal, ""},
+		token{quote, ""},
+		token{str, "apples"},
+		token{quote, ""},
 		token{eof, ""},
 	}
 
