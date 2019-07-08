@@ -253,17 +253,6 @@ func (p *parser) where() *node {
 	comp := p.comparator()
 	b := p.value()
 
-	if a.t == key {
-		if b.t != literal {
-			panic(errors.New("Parse error: expected key = literal"))
-		}
-	} else {
-		if b.t != key {
-			panic(errors.New("Parse error: expected literal = key"))
-		}
-		a, b = b, a
-	}
-
 	return &node{whereExpr, []*node{a, comp, b}, ""}
 }
 
