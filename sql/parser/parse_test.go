@@ -1,4 +1,4 @@
-package sql
+package parser
 
 import (
 	"testing"
@@ -13,7 +13,7 @@ func TestParser(t *testing.T) {
 	}
 
 	for _, q := range queries {
-		l := newParser(q)
-		spew.Dump(l.parse())
+		l := New(q)
+		spew.Dump(l.Parse())
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/alexbostock/alder/schema"
+	"github.com/alexbostock/alder/sql"
 )
 
 func main() {
@@ -35,8 +36,8 @@ func main() {
 			}
 		}
 
-		fmt.Println(line[:len(line)-1])
-		fmt.Println("(SQL parser is not yet implemented)")
+		sql.Compile(schema, line[:len(line)-1])
+		fmt.Println("(Query processor is not yet implemented)")
 	}
 
 	_ = schema
