@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -37,7 +38,7 @@ const (
 	star
 	str
 	num
-	quote
+	stringLit
 )
 
 type token struct {
@@ -46,8 +47,11 @@ type token struct {
 }
 
 type lexer struct {
-	str        string
-	dictionary map[string]tokentype
+	str           string
+	dictionary    map[string]tokentype
+	strPattern    *regexp.Regexp
+	strLitPattern *regexp.Regexp
+	numPattern    *regexp.Regexp
 }
 
 func newLexer(input string) *lexer {
@@ -71,89 +75,51 @@ func newLexer(input string) *lexer {
 			"values":    values,
 			"update":    update,
 			"set":       set,
-			"delete":    del},
+			"delete":    del,
+			"(":         lparen,
+			")":         rparen,
+			",":         comma,
+			"=":         equal,
+			">":         greater,
+			"<":         less,
+			"*":         star,
+		},
+		strPattern:    regexp.MustCompile("[a-zA-Z0-9_\\.]+"),
+		strLitPattern: regexp.MustCompile("'.*'"),
+		numPattern:    regexp.MustCompile("[0-9]+"),
 	}
 }
 
 func (l *lexer) lex() token {
-	if len(l.str) == 0 {
-		return token{eof, ""}
-	}
-
-startloop:
 	for {
 		if len(l.str) == 0 {
-			break startloop
+			return token{eof, ""}
 		}
 
-		switch rune(l.str[0]) {
-		case ' ':
+		if unicode.IsSpace(rune(l.str[0])) {
 			l.str = l.str[1:]
-		case '\t':
-			l.str = l.str[1:]
-		case '\n':
-			l.str = l.str[1:]
-		case '(':
-			l.str = l.str[1:]
-			return token{lparen, ""}
-		case ')':
-			l.str = l.str[1:]
-			return token{rparen, ""}
-		case ',':
-			l.str = l.str[1:]
-			return token{comma, ""}
-		case '=':
-			l.str = l.str[1:]
-			return token{equal, ""}
-		case '>':
-			l.str = l.str[1:]
-			return token{greater, ""}
-		case '<':
-			l.str = l.str[1:]
-			return token{less, ""}
-		case '*':
-			l.str = l.str[1:]
-			return token{star, ""}
-		case '\'':
-			l.str = l.str[1:]
-			return token{quote, ""}
-		default:
-			break startloop
-		}
-	}
-
-	for str, tok := range l.dictionary {
-		if strings.HasPrefix(l.str, str) {
-			l.str = l.str[len(str):]
-			return token{tok, ""}
-		}
-	}
-
-	var s strings.Builder
-	isNumber := true
-
-builderloop:
-	for {
-		if len(l.str) == 0 {
-			break builderloop
 		}
 
-		switch l.str[0] {
-		case ' ', '\t', '\n', '(', ')', ',', '=', '>', '<', '*', '\'':
-			break builderloop
-		default:
-			if !unicode.IsDigit(rune(l.str[0])) {
-				isNumber = false
+		for str, tok := range l.dictionary {
+			if strings.HasPrefix(l.str, str) {
+				l.str = l.str[len(str):]
+				return token{tok, ""}
 			}
-
-			s.Write([]byte{l.str[0]})
-			l.str = l.str[1:]
 		}
-	}
 
-	if isNumber {
-		return token{num, s.String()}
-	} else {
-		return token{str, s.String()}
+		if match := l.strPattern.FindString(l.str); match != "" && strings.HasPrefix(l.str, match) {
+			l.str = l.str[len(match):]
+			return token{str, strings.TrimSpace(match)}
+		}
+
+		if match := l.strLitPattern.FindString(l.str); match != "" && strings.HasPrefix(l.str, match) {
+			l.str = l.str[len(match):]
+			return token{stringLit, match[1 : len(match)-1]}
+		}
+
+		if match := l.numPattern.FindString(l.str); match != "" && strings.HasPrefix(l.str, match) {
+			l.str = l.str[len(match):]
+			return token{num, match}
+		}
 	}
 }

@@ -242,6 +242,7 @@ func (p *parser) filters() *node {
 		case eof, union, intersect, minus:
 			return n
 		default:
+			spew.Dump(p.lookahead)
 			panic(errors.New("Parse error: expected WHERE, ORDER or [INNER|OUTER|LEFT|RIGHT] JOIN"))
 		}
 	}
@@ -343,10 +344,8 @@ func (p *parser) value() *node {
 		return &node{literal, []*node{
 			&node{integer, nil, p.consume(num)},
 		}, ""}
-	case quote:
-		p.consume(quote)
-		s := p.consume(str)
-		p.consume(quote)
+	case stringLit:
+		s := p.consume(stringLit)
 		return &node{literal, []*node{
 			&node{strVal, nil, s},
 		}, ""}
