@@ -3,7 +3,7 @@ package sql
 import "testing"
 
 func TestLexer(t *testing.T) {
-	l := newLexer("SELECT price FROM products WHERE name = \"apples\"")
+	l := newLexer("SELECT price FROM products WHERE name = 'apples'")
 
 	tokens := []token{
 		token{slct, ""},

@@ -114,7 +114,7 @@ startloop:
 		case '*':
 			l.str = l.str[1:]
 			return token{star, ""}
-		case '"':
+		case '\'':
 			l.str = l.str[1:]
 			return token{quote, ""}
 		default:
@@ -139,7 +139,7 @@ builderloop:
 		}
 
 		switch l.str[0] {
-		case ' ', '\t', '\n', '(', ')', ',', '=', '>', '<', '*', '"':
+		case ' ', '\t', '\n', '(', ')', ',', '=', '>', '<', '*', '\'':
 			break builderloop
 		default:
 			if !unicode.IsDigit(rune(l.str[0])) {
