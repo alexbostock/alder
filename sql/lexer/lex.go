@@ -13,6 +13,7 @@ const (
 	Slct
 	From
 	Where
+	And
 	Orderby
 	Inner
 	Outer
@@ -60,6 +61,7 @@ func New(input string) *Lexer {
 			"select":    Slct,
 			"from":      From,
 			"where":     Where,
+			"and":       And,
 			"order by":  Orderby,
 			"inner":     Inner,
 			"outer":     Outer,

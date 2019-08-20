@@ -233,6 +233,9 @@ func (p *Parser) filters() *Node {
 		switch p.lookahead.Kind {
 		case lexer.Where:
 			n.Args = append(n.Args, p.where())
+			for p.lookahead.Kind == lexer.And {
+				n.Args = append(n.Args, p.and())
+			}
 		case lexer.Orderby:
 			n.Args = append(n.Args, p.order())
 		case lexer.Inner, lexer.Outer, lexer.Left, lexer.Right, lexer.Join:
@@ -247,6 +250,15 @@ func (p *Parser) filters() *Node {
 
 func (p *Parser) where() *Node {
 	p.consume(lexer.Where)
+	a := p.value()
+	comp := p.comparator()
+	b := p.value()
+
+	return &Node{WhereExpr, []*Node{a, comp, b}, ""}
+}
+
+func (p *Parser) and() *Node {
+	p.consume(lexer.And)
 	a := p.value()
 	comp := p.comparator()
 	b := p.value()
