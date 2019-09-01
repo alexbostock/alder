@@ -2,6 +2,8 @@ package store
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -46,6 +48,7 @@ func TestBPTree(t *testing.T) {
 
 	succ := func(x []byte) []byte {
 		y := make([]byte, len(x))
+		copy(y, x)
 
 		if len(y) > 0 {
 			y[len(y)-1]++
@@ -67,7 +70,12 @@ func TestBPTree(t *testing.T) {
 		} else if r < 0.75 {
 			update(t, store, reference, key, succ)
 		} else {
-			//del(t, store, reference, key)
+			del(t, store, reference, key)
+		}
+
+		errs := store.root.verifyInvariants(store.b)
+		for _, err := range errs {
+			t.Errorf(err.Error())
 		}
 	}
 }
@@ -104,6 +112,7 @@ func update(t *testing.T, store Store, reference map[int][]byte, key int, f func
 	ok := store.Update(key, f)
 	if !ok && reference[key] != nil {
 		t.Error("Update failed.")
+		store.Update(key, f)
 	}
 	if ok {
 		reference[key] = f(reference[key])
@@ -111,14 +120,71 @@ func update(t *testing.T, store Store, reference map[int][]byte, key int, f func
 }
 
 func del(t *testing.T, store Store, reference map[int][]byte, key int) {
-	t.Log("del", key)
-
 	present := reference[key] != nil
 	deleted := store.Delete(key)
 	if present != deleted {
 		t.Error("Delete failed.")
 	}
 	if deleted {
+		t.Log("del", key)
+
 		delete(reference, key)
 	}
+}
+
+func (n *nonleafnode) verifyInvariants(b int) []error {
+	errs := make([]error, 0)
+
+	if n.parent == nil {
+		if len(n.children) < 2 {
+			errs = append(errs, fmt.Errorf("Root has too few children %v", n))
+		}
+		if len(n.children) > b {
+			errs = append(errs, fmt.Errorf("Root has too many children %v", n))
+		}
+	} else {
+		if len(n.children) < int(math.Ceil(float64(b)/2)) {
+			errs = append(errs, fmt.Errorf("Internal node has too few children %v", n))
+		}
+		if len(n.children) > b {
+			errs = append(errs, fmt.Errorf("Internal node has too many children %v", n))
+		}
+	}
+
+	if len(n.children) != len(n.keys)+1 {
+		errs = append(errs, fmt.Errorf("Node does not satisfy #children == #keys + 1 %v", n))
+	}
+
+	for _, child := range n.children {
+		errs = append(errs, child.verifyInvariants(b)...)
+
+		if child.getParent() != n {
+			errs = append(errs, fmt.Errorf("Incorrect parent pointer %+v %p %p", child, n, child.getParent()))
+		}
+	}
+
+	for i, key := range n.keys {
+		if key != n.children[i+1].firstKey() {
+			errs = append(errs, fmt.Errorf("Node key does match smallest leaf key %v", n))
+		}
+	}
+
+	return errs
+}
+
+func (n *leafnode) verifyInvariants(b int) []error {
+	errs := make([]error, 0)
+
+	if len(n.children) < int(math.Ceil(float64(b)/2)) && n.parent != nil {
+		errs = append(errs, fmt.Errorf("Leaf node has too few values %v", n))
+	}
+	if len(n.children) > b {
+		errs = append(errs, fmt.Errorf("Leaf node has too many values %v", n))
+	}
+
+	if len(n.children) != len(n.keys) {
+		errs = append(errs, fmt.Errorf("#keys in leaf does not match #values %v", n))
+	}
+
+	return errs
 }
