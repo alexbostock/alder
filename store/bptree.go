@@ -53,6 +53,17 @@ func (t *bptree) Update(key int, f func([]byte) []byte) bool {
 	return t.root.update(key, f)
 }
 
+// UpdateRange applies the given function to all values with keys in the given
+// range.
+func (t *bptree) UpdateRange(minKey, maxKey int, f func([]byte) []byte) {
+	t.root.updateRange(minKey, maxKey, f)
+}
+
+// UpdateAllWhere applies f to all values for which pred is true.
+func (t *bptree) UpdateAllWhere(pred func(int, []byte) bool, f func([]byte) []byte) {
+	t.root.updateAllWhere(pred, f)
+}
+
 // Delete deletes the record associated with a given key, if such a record exists.
 // It returns true if a record was deleted.
 func (t *bptree) Delete(key int) bool {
@@ -77,6 +88,8 @@ type treenode interface {
 	getAllWhere(pred func(int, []byte) bool) map[int][]byte
 	insert(key int, val []byte, b int) (int, treenode, error)
 	update(key int, f func([]byte) []byte) bool
+	updateRange(minKey, maxKey int, f func([]byte) []byte)
+	updateAllWhere(pred func(int, []byte) bool, f func([]byte) []byte)
 	getParent() *nonleafnode
 	setParent(p *nonleafnode)
 	firstKey() int
@@ -360,6 +373,49 @@ func (n *leafnode) update(key int, f func([]byte) []byte) bool {
 		}
 	}
 	return false
+}
+
+func (n *nonleafnode) updateRange(minKey, maxKey int, f func([]byte) []byte) {
+	for i, k := range n.keys {
+		if k > minKey {
+			n.children[i].updateRange(minKey, maxKey, f)
+			return
+		}
+	}
+	n.children[len(n.keys)].updateRange(minKey, maxKey, f)
+}
+
+func (n *leafnode) updateRange(minKey, maxKey int, f func([]byte) []byte) {
+	currentNode := n
+
+	for currentNode != nil {
+		for i, key := range currentNode.keys {
+			if key > maxKey {
+				return
+			}
+			if key >= minKey {
+				currentNode.children[i] = f(currentNode.children[i])
+			}
+		}
+		currentNode = currentNode.nextLeaf
+	}
+}
+
+func (n *nonleafnode) updateAllWhere(pred func(int, []byte) bool, f func([]byte) []byte) {
+	n.children[0].updateAllWhere(pred, f)
+}
+
+func (n *leafnode) updateAllWhere(pred func(int, []byte) bool, f func([]byte) []byte) {
+	node := n
+
+	for node != nil {
+		for i, key := range node.keys {
+			if pred(key, node.children[i]) {
+				node.children[i] = f(node.children[i])
+			}
+		}
+		node = node.nextLeaf
+	}
 }
 
 func (n *nonleafnode) del(key, b int, leftSib, rightSib treenode) bool {

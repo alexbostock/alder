@@ -81,7 +81,7 @@ func TestBPTree(t *testing.T) {
 	}
 }
 
-func TestGetRange(t *testing.T) {
+func TestRange(t *testing.T) {
 	store := NewBPTree(4)
 
 	for i := 0; i < 100; i++ {
@@ -104,20 +104,63 @@ func TestGetRange(t *testing.T) {
 			t.Errorf("Value missing from range: %v", i)
 		}
 	}
+
+	store.UpdateRange(5, 23, func(x []byte) []byte {
+		r := make([]byte, len(x))
+		copy(r, x)
+		if len(r) > 0 {
+			r[0]++
+		}
+
+		return r
+	})
+
+	res = store.GetRange(5, 23)
+	for i := 5; i <= 23; i++ {
+		if !bytes.Equal(res[i], []byte{byte(i + 1)}) {
+			t.Errorf("Value missing from range: %v", i)
+		}
+	}
 }
 
-func TestGetAllWhere(t *testing.T) {
+func TestAllWhere(t *testing.T) {
 	store := NewBPTree(4)
 
 	for i := 0; i < 100; i++ {
 		store.Insert(i, []byte{byte(i)})
 	}
 
-	res := store.GetAllWhere(func(key int, val []byte) bool {
+	rangePred := func(key int, val []byte) bool {
 		return 5 <= key && key <= 23
-	})
+	}
+	alwaysTrue := func(int, []byte) bool {
+		return true
+	}
+
+	res := store.GetAllWhere(rangePred)
 	if !reflect.DeepEqual(res, store.GetRange(5, 23)) {
-		t.Error("TestGetAllWhere output does not match equivalent GetRange")
+		t.Error("GetAllWhere output does not match equivalent GetRange")
+	}
+
+	store.UpdateAllWhere(func(key int, val []byte) bool {
+		return key%2 == 1
+	}, func(x []byte) []byte {
+		return []byte{1, 2, 3, 4, 5}
+	})
+
+	res = store.GetAllWhere(alwaysTrue)
+	for i := 0; i < 100; i++ {
+		if i%2 == 0 {
+			if !bytes.Equal(res[i], []byte{byte(i)}) {
+				t.Error("UpdateAllWhere failed")
+				break
+			}
+		} else {
+			if !bytes.Equal(res[i], []byte{1, 2, 3, 4, 5}) {
+				t.Error("UpdateAllWhere failed")
+				break
+			}
+		}
 	}
 }
 
