@@ -8,4 +8,5 @@ type Store interface {
 	Insert(key int, val []byte) bool            // Insert a new record and return true if successful
 	Update(key int, f func([]byte) []byte) bool // Update an existing record and return true if successful
 	Delete(key int) bool                        // Delete an existing record and return true if successful
+	GetRange(minKey, maxKey int) map[int][]byte // Returns all key-value pairs with keys in inclusive range [minKey,maxKey]
 }

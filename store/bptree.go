@@ -16,6 +16,11 @@ func (t *bptree) Get(key int) []byte {
 	return t.root.get(key)
 }
 
+// Get searches for all key-value pairs with keys in a given range
+func (t *bptree) GetRange(minKey, maxKey int) map[int][]byte {
+	return t.root.getRange(minKey, maxKey)
+}
+
 // Insert adds a new key-value pair to the tree.
 func (t *bptree) Insert(key int, val []byte) bool {
 	newKey, newChild, err := t.root.insert(key, val, t.b)
@@ -50,6 +55,8 @@ func (t *bptree) Delete(key int) bool {
 }
 
 // NewBPTree instantitates a B+ tree, with a given branching factor.
+// Known issue: odd branching factor may cause issues (seen in verifyInvariants
+// as "Leaf node has too few values").
 func NewBPTree(b int) *bptree {
 	return &bptree{
 		b,
@@ -61,6 +68,7 @@ func NewBPTree(b int) *bptree {
 type treenode interface {
 	del(key, b int, leftSibling, rightSibling treenode) bool
 	get(key int) []byte
+	getRange(minKey, maxKey int) map[int][]byte
 	insert(key int, val []byte, b int) (int, treenode, error)
 	update(key int, f func([]byte) []byte) bool
 	getParent() *nonleafnode
@@ -123,6 +131,36 @@ func (n *leafnode) get(key int) []byte {
 		}
 	}
 	return nil
+}
+
+func (n *nonleafnode) getRange(minKey, maxKey int) map[int][]byte {
+	for i, k := range n.keys {
+		if k > minKey {
+			return n.children[i].getRange(minKey, maxKey)
+		}
+	}
+	return n.children[len(n.keys)].getRange(minKey, maxKey)
+}
+
+func (n *leafnode) getRange(minKey, maxKey int) map[int][]byte {
+	result := make(map[int][]byte)
+
+	currentNode := n
+	for currentNode != nil {
+		for i, key := range currentNode.keys {
+			if key > maxKey {
+				return result
+			}
+			if key >= minKey {
+				val := make([]byte, len(currentNode.children[i]))
+				copy(val, currentNode.children[i])
+				result[key] = val
+			}
+		}
+		currentNode = currentNode.nextLeaf
+	}
+
+	return result
 }
 
 func (n *nonleafnode) insert(key int, val []byte, b int) (int, treenode, error) {
@@ -264,15 +302,13 @@ func (n *leafnode) insRecord(key int, val []byte) {
 		index++
 	}
 
-	keys := append(n.keys, 0)
-	copy(keys[index+1:], n.keys[index:])
-	keys[index] = key
-	n.keys = keys
+	n.keys = append(n.keys, 0)
+	copy(n.keys[index+1:], n.keys[index:])
+	n.keys[index] = key
 
-	vals := append(n.children, nil)
-	copy(vals[index+1:], n.children[index:])
-	vals[index] = val
-	n.children = vals
+	n.children = append(n.children, nil)
+	copy(n.children[index+1:], n.children[index:])
+	n.children[index] = val
 }
 
 func (n *nonleafnode) update(key int, f func([]byte) []byte) bool {

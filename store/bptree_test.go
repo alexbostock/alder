@@ -80,6 +80,31 @@ func TestBPTree(t *testing.T) {
 	}
 }
 
+func TestGetRange(t *testing.T) {
+	store := NewBPTree(4)
+
+	for i := 0; i < 100; i++ {
+		if ok := store.Insert(i, []byte{byte(i)}); !ok {
+			t.Error("Insertion failed")
+		}
+	}
+
+	errs := store.root.verifyInvariants(store.b)
+	for _, err := range errs {
+		t.Errorf(err.Error())
+	}
+
+	res := store.GetRange(5, 23)
+	if len(res) != 23-5+1 {
+		t.Error("Incorrect range returned")
+	}
+	for i := 5; i <= 23; i++ {
+		if !bytes.Equal(res[i], []byte{byte(i)}) {
+			t.Errorf("Value missing from range: %v", i)
+		}
+	}
+}
+
 func get(t *testing.T, store Store, reference map[int][]byte, key int) {
 	t.Log("get", key)
 
