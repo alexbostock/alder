@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"testing"
 )
 
@@ -102,6 +103,21 @@ func TestGetRange(t *testing.T) {
 		if !bytes.Equal(res[i], []byte{byte(i)}) {
 			t.Errorf("Value missing from range: %v", i)
 		}
+	}
+}
+
+func TestGetAllWhere(t *testing.T) {
+	store := NewBPTree(4)
+
+	for i := 0; i < 100; i++ {
+		store.Insert(i, []byte{byte(i)})
+	}
+
+	res := store.GetAllWhere(func(key int, val []byte) bool {
+		return 5 <= key && key <= 23
+	})
+	if !reflect.DeepEqual(res, store.GetRange(5, 23)) {
+		t.Error("TestGetAllWhere output does not match equivalent GetRange")
 	}
 }
 

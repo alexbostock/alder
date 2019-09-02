@@ -16,9 +16,14 @@ func (t *bptree) Get(key int) []byte {
 	return t.root.get(key)
 }
 
-// Get searches for all key-value pairs with keys in a given range
+// GetRange searches for all key-value pairs with keys in a given range.
 func (t *bptree) GetRange(minKey, maxKey int) map[int][]byte {
 	return t.root.getRange(minKey, maxKey)
+}
+
+// GetAllWhere returns all key-value pairs which satisfy a given predicate.
+func (t *bptree) GetAllWhere(pred func(int, []byte) bool) map[int][]byte {
+	return t.root.getAllWhere(pred)
 }
 
 // Insert adds a new key-value pair to the tree.
@@ -69,6 +74,7 @@ type treenode interface {
 	del(key, b int, leftSibling, rightSibling treenode) bool
 	get(key int) []byte
 	getRange(minKey, maxKey int) map[int][]byte
+	getAllWhere(pred func(int, []byte) bool) map[int][]byte
 	insert(key int, val []byte, b int) (int, treenode, error)
 	update(key int, f func([]byte) []byte) bool
 	getParent() *nonleafnode
@@ -152,6 +158,28 @@ func (n *leafnode) getRange(minKey, maxKey int) map[int][]byte {
 				return result
 			}
 			if key >= minKey {
+				val := make([]byte, len(currentNode.children[i]))
+				copy(val, currentNode.children[i])
+				result[key] = val
+			}
+		}
+		currentNode = currentNode.nextLeaf
+	}
+
+	return result
+}
+
+func (n *nonleafnode) getAllWhere(pred func(int, []byte) bool) map[int][]byte {
+	return n.children[0].getAllWhere(pred)
+}
+
+func (n *leafnode) getAllWhere(pred func(int, []byte) bool) map[int][]byte {
+	result := make(map[int][]byte)
+
+	currentNode := n
+	for currentNode != nil {
+		for i, key := range currentNode.keys {
+			if pred(key, currentNode.children[i]) {
 				val := make([]byte, len(currentNode.children[i]))
 				copy(val, currentNode.children[i])
 				result[key] = val
