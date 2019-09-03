@@ -74,7 +74,7 @@ func TestBPTree(t *testing.T) {
 			del(t, store, reference, key)
 		}
 
-		errs := store.root.verifyInvariants(store.b)
+		errs := store.root.(testableNode).verifyInvariants(store.b)
 		for _, err := range errs {
 			t.Errorf(err.Error())
 		}
@@ -90,7 +90,7 @@ func TestRange(t *testing.T) {
 		}
 	}
 
-	errs := store.root.verifyInvariants(store.b)
+	errs := store.root.(testableNode).verifyInvariants(store.b)
 	for _, err := range errs {
 		t.Errorf(err.Error())
 	}
@@ -216,6 +216,10 @@ func del(t *testing.T, store Store, reference map[int][]byte, key int) {
 	}
 }
 
+type testableNode interface {
+	verifyInvariants(b int) []error
+}
+
 func (n *nonleafnode) verifyInvariants(b int) []error {
 	errs := make([]error, 0)
 
@@ -240,7 +244,7 @@ func (n *nonleafnode) verifyInvariants(b int) []error {
 	}
 
 	for _, child := range n.children {
-		errs = append(errs, child.verifyInvariants(b)...)
+		errs = append(errs, child.(testableNode).verifyInvariants(b)...)
 
 		if child.getParent() != n {
 			errs = append(errs, fmt.Errorf("Incorrect parent pointer %+v %p %p", child, n, child.getParent()))

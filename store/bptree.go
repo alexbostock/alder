@@ -94,7 +94,6 @@ type treenode interface {
 	setParent(p *nonleafnode)
 	firstKey() int
 	concat(t treenode)
-	verifyInvariants(b int) []error
 }
 
 type nonleafnode struct {
