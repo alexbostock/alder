@@ -2,12 +2,11 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"io/ioutil"
 	"os"
 
+	"github.com/alexbostock/alder/database"
 	"github.com/alexbostock/alder/schema"
-	"github.com/alexbostock/alder/sql"
 )
 
 func main() {
@@ -24,6 +23,7 @@ func main() {
 	}
 
 	schema := schema.New(schemaFile)
+	db := database.New(4, schema)
 
 	r := bufio.NewReader(os.Stdin)
 	for {
@@ -36,8 +36,7 @@ func main() {
 			}
 		}
 
-		sql.Compile(schema, line[:len(line)-1])
-		fmt.Println("(Query processor is not yet implemented)")
+		db.Query(line[:len(line)-1])
 	}
 
 	_ = schema
