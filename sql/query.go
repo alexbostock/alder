@@ -4,64 +4,47 @@ import "github.com/alexbostock/alder/sql/parser"
 
 // A Query is a semantic representation of a type-safe query. It should be
 // instantiated by Compile.
-type Query interface {
-	Execute()
-}
+type Query interface{}
 
-type compoundQuery struct {
-	query1    selectQuery
+type CompoundQuery struct {
+	query1    SelectQuery
 	operation parser.Nonterminal
 	query2    Query
 }
 
-func (q compoundQuery) Execute() {
+type SelectQuery struct {
+	Keys    []string // keys == nil => select * (universal set of keys)
+	Table   string
+	Filters []Filter
 }
 
-type selectQuery struct {
-	keys    []string // keys == nil => select * (universal set of keys)
-	table   string
-	filters []filter
+type Val struct {
+	IsNum bool // true iff the value is an int (so false => value is a string)
+	Num   int
+	Str   string
 }
 
-func (q selectQuery) Execute() {
+type InsertQuery struct {
+	Keys   []string
+	Values [][]Val
+	Table  string
 }
 
-type val struct {
-	isNum bool // true iff the value is an int (so false => value is a string)
-	num   int
-	str   string
+type UpdateQuery struct {
+	Values map[string]Val
+	Table  string
+	Where  WhereClause
 }
 
-type insertQuery struct {
-	keys   []string
-	values [][]val
-	table  string
+type DeleteQuery struct {
+	Table string
+	Where WhereClause
 }
 
-func (q insertQuery) Execute() {
-}
-
-type updateQuery struct {
-	values map[string]val
-	table  string
-	where  whereClause
-}
-
-func (q updateQuery) Execute() {
-}
-
-type deleteQuery struct {
-	table string
-	where whereClause
-}
-
-func (q deleteQuery) Execute() {
-}
-
-type filter struct {
+type Filter struct {
 	// TODO: implement this
 }
 
-type whereClause struct {
+type WhereClause struct {
 	// TODO: implement this
 }

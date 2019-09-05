@@ -86,3 +86,23 @@ func New(file []byte) Schema {
 	yaml.UnmarshalStrict(file, &untyped)
 	return untyped.typeCheck()
 }
+
+func (s Schema) GetTable(t string) Table {
+	for _, table := range s.Tables {
+		if table.Name == t {
+			return table
+		}
+	}
+
+	panic(errors.New("Invalid table name (should not have passed static analysis)"))
+}
+
+func (t Table) GetPrimaryKey() string {
+	for _, field := range t.Fields {
+		if field.Type == PrimaryKey {
+			return field.Name
+		}
+	}
+
+	panic(errors.New("Table without primary key (should not have passed static analysis)"))
+}
