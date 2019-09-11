@@ -122,7 +122,7 @@ func deserialise(data []byte) map[string]sql.Val {
 	serialised := bytes.NewReader(data)
 	d := gob.NewDecoder(serialised)
 	deserialised := make(map[string]sql.Val)
-	err := d.Decode(deserialised)
+	err := d.Decode(&deserialised)
 	if err != nil {
 		panic(err)
 	}
