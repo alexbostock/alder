@@ -130,7 +130,22 @@ func (db *Db) insertQuery(q sql.InsertQuery) {
 }
 
 func (db *Db) updateQuery(q sql.UpdateQuery) {
-	fmt.Println("Not yet implemented")
+	// WHERE clauses are not yet implemented, so update entire table
+
+	predicate := func(int, []byte) bool {
+		return true
+	}
+
+	updateFunction := func(oldValue []byte) []byte {
+		data := deserialise(oldValue)
+		for field, val := range q.Values {
+			data[field] = val
+		}
+		return serialise(data)
+	}
+
+	store := db.tables[q.Table].store
+	store.UpdateAllWhere(predicate, updateFunction)
 }
 
 func (db *Db) deleteQuery(q sql.DeleteQuery) {

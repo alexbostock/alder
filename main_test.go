@@ -22,6 +22,8 @@ func TestQueries(t *testing.T) {
 		"insert into user (forename, surname, address) values ('Alex', 'Horne', 'nope')",
 		"insert into user (forename, surname, address) values ('Alex', 'Armstrong', 'nope')",
 		"select * from user",
+		"update user set address = 'redacted'",
+		"select * from user",
 	}
 
 	for _, query := range queries {

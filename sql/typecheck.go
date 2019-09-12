@@ -256,8 +256,6 @@ func checkUpdateTypes(s map[string]map[string]schema.Datatype, uq *UpdateQuery) 
 			return errors.New("Invalid type: expected string")
 		} else if s[uq.Table][key] == schema.PrimaryKey {
 			return errors.New("Primary key cannot be updated")
-		} else {
-			return errors.New("Unexpected field type, update failed")
 		}
 	}
 
