@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 	"unicode"
@@ -87,19 +88,22 @@ func New(input string) *Lexer {
 			"*":         Star,
 		},
 		strPattern:    regexp.MustCompile("[a-zA-Z0-9_\\.]+"),
-		strLitPattern: regexp.MustCompile("'.*'"),
+		strLitPattern: regexp.MustCompile("'[^']*'"),
 		numPattern:    regexp.MustCompile("[0-9]+"),
 	}
 }
 
 func (l *Lexer) Lex() Token {
 	for {
+		unchanged := true
+
 		if len(l.str) == 0 {
 			return Token{Eof, ""}
 		}
 
 		if unicode.IsSpace(rune(l.str[0])) {
 			l.str = l.str[1:]
+			unchanged = false
 		}
 
 		for str, tok := range l.dictionary {
@@ -122,6 +126,10 @@ func (l *Lexer) Lex() Token {
 		if match := l.numPattern.FindString(l.str); match != "" && strings.HasPrefix(l.str, match) {
 			l.str = l.str[len(match):]
 			return Token{Num, match}
+		}
+
+		if unchanged {
+			panic(errors.New("Lex error"))
 		}
 	}
 }
