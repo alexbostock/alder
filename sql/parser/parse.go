@@ -127,9 +127,9 @@ func (p *Parser) selectFrom() *Node {
 
 func (p *Parser) insertInto() *Node {
 	p.consume(lexer.Insert)
-	keys := p.keys()
 	p.consume(lexer.Into)
 	table := p.table()
+	keys := p.keys()
 	p.consume(lexer.Values)
 	valuesList := p.valuesList()
 
