@@ -6,7 +6,6 @@ import (
 
 	"github.com/alexbostock/alder/schema"
 	"github.com/alexbostock/alder/sql/parser"
-	"github.com/davecgh/go-spew/spew"
 )
 
 // Compile, given an SQL query as a string and a database schema, compiles the
@@ -25,7 +24,6 @@ func Compile(s schema.Schema, query string) Query {
 	parser := parser.New(query)
 
 	q := check(schemaMap, parser.Parse())
-	spew.Dump(q)
 	return q
 }
 
@@ -103,7 +101,6 @@ func check(s map[string]map[string]schema.Datatype, query *parser.Node) Query {
 }
 
 func checkKeyList(s map[string]map[string]schema.Datatype, kl *parser.Node) []string {
-	spew.Dump(kl)
 	if kl.T == parser.Keys {
 		if len(kl.Args) != 1 {
 			panic(errors.New("Invalid parse tree"))
@@ -135,7 +132,7 @@ func checkKeyList(s map[string]map[string]schema.Datatype, kl *parser.Node) []st
 			}
 		}
 		if !validKey {
-			panic(errors.New("Invalid key"))
+			panic(errors.New("Invalid key " + k.Val))
 		}
 	}
 
@@ -163,10 +160,10 @@ func checkFilters(s map[string]map[string]schema.Datatype, filters *parser.Node)
 func checkValuesList(s map[string]map[string]schema.Datatype, valuesList *parser.Node) [][]Val {
 	valsList := make([][]Val, len(valuesList.Args))
 
-	for i, vs := range valuesList.Args {
+	for i, vs := range valuesList.Args[0].Args {
 		valsList[i] = make([]Val, len(vs.Args))
 		for j, v := range vs.Args {
-			valsList[i][j] = checkValue(v.Args[0])
+			valsList[i][j] = checkValue(v)
 		}
 	}
 

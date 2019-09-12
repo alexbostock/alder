@@ -16,25 +16,39 @@ import (
 
 type Db struct {
 	schema        schema.Schema
-	tables        map[string]store.Store
+	tables        map[string]*tab
 	cachedQueries map[string]sql.Query
 }
 
-func New(branchingFactor int, schema schema.Schema) Db {
-	db := Db{
+type tab struct {
+	nextPrimaryKey int
+	store          store.Store
+}
+
+func (t *tab) autonum() int {
+	n := t.nextPrimaryKey
+	t.nextPrimaryKey++
+	return n
+}
+
+func New(branchingFactor int, schema schema.Schema) *Db {
+	db := &Db{
 		schema:        schema,
-		tables:        make(map[string]store.Store),
+		tables:        make(map[string]*tab),
 		cachedQueries: make(map[string]sql.Query),
 	}
 
 	for _, table := range schema.Tables {
-		db.tables[table.Name] = store.NewBPTree(branchingFactor)
+		db.tables[table.Name] = &tab{
+			nextPrimaryKey: 0,
+			store:          store.NewBPTree(branchingFactor),
+		}
 	}
 
 	return db
 }
 
-func (db Db) Query(q string) {
+func (db *Db) Query(q string) {
 	query, ok := db.cachedQueries[q]
 	if !ok {
 		query = sql.Compile(db.schema, q)
@@ -44,29 +58,30 @@ func (db Db) Query(q string) {
 	db.execute(query)
 }
 
-func (db Db) execute(q sql.Query) {
-	switch q.(type) {
-	case sql.CompoundQuery:
-		db.compoundQuery(q.(sql.CompoundQuery))
-	case sql.SelectQuery:
-		spew.Dump(db.selectQuery(q.(sql.SelectQuery)))
-	case sql.InsertQuery:
-		db.insertQuery(q.(sql.InsertQuery))
-	case sql.UpdateQuery:
-		db.updateQuery(q.(sql.UpdateQuery))
-	case sql.DeleteQuery:
-		db.deleteQuery(q.(sql.DeleteQuery))
+func (db *Db) execute(q sql.Query) {
+	switch query := q.(type) {
+	case *sql.CompoundQuery:
+		db.compoundQuery(*query)
+	case *sql.SelectQuery:
+		spew.Dump(db.selectQuery(*query))
+	case *sql.InsertQuery:
+		db.insertQuery(*query)
+	case *sql.UpdateQuery:
+		db.updateQuery(*query)
+	case *sql.DeleteQuery:
+		db.deleteQuery(*query)
 	default:
-		panic(errors.New("Invalid query tree (which should not have passed static analysis"))
+		spew.Dump(q)
+		panic(errors.New("Invalid query tree (which should not have passed static analysis)"))
 	}
 }
 
-func (db Db) compoundQuery(q sql.CompoundQuery) {
+func (db *Db) compoundQuery(q sql.CompoundQuery) {
 	fmt.Println("Not yet implemented")
 }
 
-func (db Db) selectQuery(q sql.SelectQuery) []map[string]sql.Val {
-	store := db.tables[q.Table]
+func (db *Db) selectQuery(q sql.SelectQuery) []map[string]sql.Val {
+	store := db.tables[q.Table].store
 	primaryKey := db.schema.GetTable(q.Table).GetPrimaryKey()
 
 	_ = primaryKey
@@ -97,15 +112,28 @@ func (db Db) selectQuery(q sql.SelectQuery) []map[string]sql.Val {
 	return data
 }
 
-func (db Db) insertQuery(q sql.InsertQuery) {
+func (db *Db) insertQuery(q sql.InsertQuery) {
+	t := db.tables[q.Table]
+
+	for _, values := range q.Values {
+		data := make(map[string]sql.Val)
+
+		for i, key := range q.Keys {
+			data[key] = values[i]
+		}
+
+		ok := t.store.Insert(t.autonum(), serialise(data))
+		if !ok {
+			panic(errors.New("Insert failed"))
+		}
+	}
+}
+
+func (db *Db) updateQuery(q sql.UpdateQuery) {
 	fmt.Println("Not yet implemented")
 }
 
-func (db Db) updateQuery(q sql.UpdateQuery) {
-	fmt.Println("Not yet implemented")
-}
-
-func (db Db) deleteQuery(q sql.DeleteQuery) {
+func (db *Db) deleteQuery(q sql.DeleteQuery) {
 	fmt.Println("Not yet implemented")
 }
 
